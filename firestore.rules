@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // HELPERS
+    // -------------------------------------------------------------------------
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+    
+    // Verified user check - using a flexible check as some providers might not set email_verified
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'anonymous');
+    }
+
+    function isOwner(userId) { 
+      return isSignedIn() && request.auth.uid == userId; 
+    }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // -------------------------------------------------------------------------
+    // ENTITY VALIDATION
+    // -------------------------------------------------------------------------
+
+    function isValidBook(data) {
+      return data.title is string && data.title.size() <= 200 &&
+             data.author is string && data.author.size() <= 100 &&
+             data.genre is string && data.genre.size() <= 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 3000)) &&
+             (!('summaryKannada' in data) || (data.summaryKannada is string && data.summaryKannada.size() <= 3000)) &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 1000)) &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 100)) &&
+             (!('publishedDate' in data) || (data.publishedDate is string && data.publishedDate.size() <= 100)) &&
+             (!('isIssued' in data) || (data.isIssued is bool)) &&
+             (!('isReserved' in data) || (data.isReserved is bool));
+    }
+
+    function isValidUser(data) {
+      return (data.email == null || (data.email is string && data.email.size() <= 120)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 1500)) &&
+             (!('points' in data) || data.points is int) &&
+             (!('issuedBookIds' in data) || (data.issuedBookIds is list && data.issuedBookIds.size() <= 100)) &&
+             (!('reservedBookIds' in data) || (data.reservedBookIds is list && data.reservedBookIds.size() <= 100)) &&
+             (!('createdAt' in data) || (data.createdAt is string));
+    }
+
+    function isValidNotification(data) {
+      return data.title is string && data.title.size() <= 200 &&
+             data.message is string && data.message.size() <= 1000 &&
+             data.timestamp is string &&
+             data.isRead is bool &&
+             data.type in ['info', 'success', 'alert'] &&
+             (!('id' in data) || (data.id is string));
+    }
+
+    // -------------------------------------------------------------------------
+    // COLLECTIONS
+    // -------------------------------------------------------------------------
+
+    // Books: Public Catalog
+    match /books/{bookId} {
+      allow get: if isValidId(bookId);
+      allow list: if true; 
+      
+      allow create: if isVerified() && isValidId(bookId) && isValidBook(incoming()) && 
+                    incoming().keys().hasAll(['title', 'author', 'genre']) &&
+                    incoming().keys().size() <= 12;
+                    
+      allow update: if isVerified() && isValidId(bookId) && isValidBook(incoming()) && (
+        // For the purpose of this demo, we allow any verified user to update book status
+        // In production, this would be admin-only or restricted to a specific 'transaction' logic.
+        incoming().diff(existing()).affectedKeys().hasOnly(['isIssued', 'isReserved', 'issuedTo', 'reservedBy', 'issuedAt', 'reservedAt'])
+      );
+      
+      allow delete: if false; 
+    }
+
+    // Users: Private Profiles
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) &&
+                    incoming().keys().hasAll(['email']) &&
+                    incoming().keys().size() <= 10;
+                    
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming()) && 
+                    (incoming().email == existing().email) && // Immobilize email
+                    (incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoUrl', 'issuedBookIds', 'reservedBookIds', 'points', 'updatedAt', 'bookmarkedBookIds']));
+      
+      allow delete: if false;
+
+      // Notifications: Private User Data
+      match /notifications/{notifId} {
+        allow get: if isOwner(userId) && isValidId(notifId);
+        allow list: if isOwner(userId); // Query enforcer: must match parent userId
+        
+        allow create: if isOwner(userId) && isValidId(notifId) && isValidNotification(incoming()) &&
+                      incoming().keys().hasAll(['title', 'message', 'timestamp', 'isRead']) &&
+                      incoming().keys().size() <= 8;
+                      
+        allow update: if isOwner(userId) && isValidId(notifId) && isValidNotification(incoming()) &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+                      
+        allow delete: if isOwner(userId) && isValidId(notifId);
+      }
+    }
+
+    // Connection Test Document
+    match /test/connection {
+      allow get: if true;
+    }
+  }
+}

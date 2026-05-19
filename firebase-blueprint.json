@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "Book": {
+      "title": "Book",
+      "description": "Represents a book in the library",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "description": { "type": "string" },
+        "summaryKannada": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "genre": { "type": "string" },
+        "publishedDate": { "type": "string" },
+        "isIssued": { "type": "boolean" },
+        "isReserved": { "type": "boolean" }
+      },
+      "required": ["title", "author", "genre"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Information about a library user",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "issuedBookIds": { "type": "array", "items": { "type": "string" } },
+        "reservedBookIds": { "type": "array", "items": { "type": "string" } },
+        "points": { "type": "integer" }
+      },
+      "required": ["email"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification for a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isRead": { "type": "boolean" },
+        "type": { "type": "string", "enum": ["info", "success", "alert"] }
+      },
+      "required": ["title", "message", "timestamp", "isRead"]
+    }
+  },
+  "firestore": {
+    "/books/{bookId}": {
+      "schema": "Book",
+      "description": "The library catalog"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Users of the Namma Pustaka app"
+    },
+    "/users/{userId}/notifications/{notifId}": {
+      "schema": "Notification",
+      "description": "Notifications for a specific user"
+    }
+  }
+}
