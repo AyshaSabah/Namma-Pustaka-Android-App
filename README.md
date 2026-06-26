@@ -7,6 +7,7 @@
 This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/2555d892-668d-48ea-a75c-9eba0a21491d
+                 Live Demo: https://namma-pustaka-rrremix-841090338034.us-west1.run.app
 
 ## Run Locally
 
